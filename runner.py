@@ -9,6 +9,6 @@ config = yaml.safe_load(open(config_file))
 hel_downloader = helium_downloader.HeliumDownloader(config['helium']['wallet_address'])
 
 
-print(hel_downloader.get_account_hotspots())
+print(hel_downloader.get_hotspots_witnesses())
 
 
