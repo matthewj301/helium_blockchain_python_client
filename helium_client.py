@@ -1,10 +1,14 @@
 import requests
 
 
-class HeliumDownloader:
-    def __init__(self, wallet_address):
+class HeliumClient:
+    def __init__(self, wallet_address, api_version=None):
+        if api_version is None:
+            self.api_version = 'v1'
+        else:
+            self.api_version = api_version
         self.wallet_address = wallet_address
-        self.api_endpoint = 'https://api.helium.io/v1'
+        self.api_endpoint = f'https://api.helium.io/{self.api_version}'
         self.req = requests.Session()
         self.account_hotspots = self.get_account_hotspots()
 
