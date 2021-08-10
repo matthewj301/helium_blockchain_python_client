@@ -1,5 +1,9 @@
 import requests
 from loguru import logger
+import sys
+
+logger.remove()
+logger.add(sys.stdout, level='INFO')
 
 class HeliumClient:
     def __init__(self, wallet_address, api_version=None):
@@ -38,23 +42,30 @@ class HeliumClient:
 
     def parse_hotspot_activity_return(self, _hotspot_address, _hotspot_activity_data):
         _activity_type = _hotspot_activity_data['type']
-        necessary_activity_info = {'activity_type': _activity_type, 'time': _hotspot_activity_data['time']}
+        necessary_activity_info = {'activity_type': _activity_type, 'time': _hotspot_activity_data['time'],
+                                   'hotspot_name': self.account_hotspot_address_lookup[_hotspot_address]}
         if _activity_type == 'poc_receipts_v1':
-            print(_hotspot_activity_data)
+            additional_info = _hotspot_activity_data['path'][0]
+            if _hotspot_address == additional_info['challengee']:
+                necessary_activity_info['challenegee'] = self.account_hotspot_address_lookup[additional_info['challengee']]
             for _possible_witness in _hotspot_activity_data['path'][0]['witnesses']:
                 if _possible_witness['gateway'] == _hotspot_address:
-                    #necessary_activity_info['challenegee']
                     necessary_activity_info['is_valid'] = _possible_witness['is_valid']
                     necessary_activity_info['snr'] = _possible_witness['snr']
                     necessary_activity_info['signal'] = _possible_witness['signal']
                     necessary_activity_info['channel'] = _possible_witness['channel']
                     if necessary_activity_info['is_valid'] is False:
                         necessary_activity_info['invalid_reason'] = _possible_witness['invalid_reason']
+
+        elif _activity_type == 'poc_request_v1':
+            necessary_activity_info['challenger'] = self.account_hotspot_address_lookup[_hotspot_activity_data['challenger']]
         elif _activity_type == 'rewards_v2':
             for _possible_reward in _hotspot_activity_data['rewards']:
                 if _possible_reward['gateway'] == _hotspot_address:
                     necessary_activity_info['type'] = _possible_reward['type']
                     necessary_activity_info['reward_amount'] = _possible_reward['amount']
+        else:
+            print(_hotspot_activity_data)
 
         if 'cursor' in _hotspot_activity_data:
             return _hotspot_activity_data
@@ -85,7 +96,6 @@ class HeliumClient:
             return self.parse_hotspot_returns(_hotspot_return.json()['data'])
 
     def get_hotspots_activity(self, hotspot_addresses=None):
-        all_hotspot_activity = []
         if hotspot_addresses is None:
             hotspot_addresses = self.account_hotspot_addresses
         for _hotspot_addr in hotspot_addresses:
@@ -95,24 +105,32 @@ class HeliumClient:
             if _hotspot_activity:
                 _relevant_activity = {_hotspot_name: [self.parse_hotspot_activity_return(_hotspot_addr, _a) for _a
                                                       in _hotspot_activity]}
-                all_hotspot_activity.append(_relevant_activity)
             else:
-                all_hotspot_activity.append({_hotspot_name: []})
-                logger.warning(f'no data returned for hotspot: {_hotspot_name}')
-        return all_hotspot_activity
+                _relevant_activity = {_hotspot_name: []}
+                logger.debug(f'no data returned for hotspot: {_hotspot_name}')
+            yield _relevant_activity
 
     def get_hotspot_activity(self, hotspot_address):
         _hotspot_activity_return = self.req.get(f'{self.api_endpoint}/hotspots/{hotspot_address}/activity')
         if _hotspot_activity_return.status_code < 300:
             return _hotspot_activity_return.json()['data']
 
-    def get_hotspots_witnesses(self, hotspot_addresses=None):
-        all_hotspot_witnesses = []
+    def get_hotspots_challenges(self, hotspot_addresses=None):
         if hotspot_addresses is None:
             hotspot_addresses = self.account_hotspot_addresses
         for _hotspot_addr in hotspot_addresses:
-            all_hotspot_witnesses.append(self.get_hotspot_witnesses(_hotspot_addr))
-        return all_hotspot_witnesses
+            yield self.get_hotspot_challenges(_hotspot_addr)
+
+    def get_hotspot_challenges(self, hotspot_address):
+        _hotspot_activity_return = self.req.get(f'{self.api_endpoint}/hotspots/{hotspot_address}/challenges')
+        if _hotspot_activity_return.status_code < 300:
+            return _hotspot_activity_return.json()['data']
+
+    def get_hotspots_witnesses(self, hotspot_addresses=None):
+        if hotspot_addresses is None:
+            hotspot_addresses = self.account_hotspot_addresses
+        for _hotspot_addr in hotspot_addresses:
+            yield self.get_hotspot_witnesses(_hotspot_addr)
 
     def get_hotspot_witnesses(self, hotspot_address):
         _hotspot_witness_return = self.req.get(f'{self.api_endpoint}/hotspots/{hotspot_address}/witnesses')
@@ -120,12 +138,10 @@ class HeliumClient:
             return _hotspot_witness_return.json()['data']
 
     def get_hotspots_witnessed(self, hotspot_addresses=None):
-        all_hotspot_witnessed = []
         if hotspot_addresses is None:
             hotspot_addresses = self.account_hotspot_addresses
         for _hotspot_addr in hotspot_addresses:
-            all_hotspot_witnessed.append(self.get_hotspot_witnesses(_hotspot_addr))
-        return all_hotspot_witnessed
+            yield self.get_hotspot_witnesses(_hotspot_addr)
 
     def get_hotspot_witnessed(self, hotspot_address):
         _hotspot_witnessed_return = self.req.get(f'{self.api_endpoint}/hotspots/{hotspot_address}/witnessed')
