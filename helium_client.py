@@ -50,6 +50,15 @@ class HeliumClient:
                 necessary_activity_info['challenegee'] = self.account_hotspot_address_lookup[additional_info['challengee']]
             for _possible_witness in _hotspot_activity_data['path'][0]['witnesses']:
                 if _possible_witness['gateway'] == _hotspot_address:
+                    necessary_activity_info['witness_name'] = self.account_hotspot_address_lookup[_hotspot_address]
+                    necessary_activity_info['is_valid'] = _possible_witness['is_valid']
+                    necessary_activity_info['snr'] = _possible_witness['snr']
+                    necessary_activity_info['signal'] = _possible_witness['signal']
+                    necessary_activity_info['channel'] = _possible_witness['channel']
+                    if necessary_activity_info['is_valid'] is False:
+                        necessary_activity_info['invalid_reason'] = _possible_witness['invalid_reason']
+                else:
+                    necessary_activity_info['witness_name'] = self.get_hotspot_by_address(_possible_witness['gateway'])
                     necessary_activity_info['is_valid'] = _possible_witness['is_valid']
                     necessary_activity_info['snr'] = _possible_witness['snr']
                     necessary_activity_info['signal'] = _possible_witness['signal']
@@ -87,13 +96,18 @@ class HeliumClient:
         if _hotspots_return.status_code < 300:
             return self.parse_hotspot_returns(_hotspots_return.json()['data'])
 
-    def get_hotspot(self, hotspot_name):
+    def get_hotspot_by_name(self, hotspot_name):
         hotspot_name = hotspot_name.lower()
         if ' ' in hotspot_name or '_' in hotspot_name:
             hotspot_name = hotspot_name.replace(' ', '-').replace('_', '-')
         _hotspot_return = self.req.get(f'{self.api_endpoint}/hotspots/name/{hotspot_name}')
         if _hotspot_return.status_code < 300:
-            return self.parse_hotspot_returns(_hotspot_return.json()['data'])
+            return self.parse_hotspot_return(_hotspot_return.json()['data'])
+
+    def get_hotspot_by_address(self, hotspot_address):
+        _hotspot_return = self.req.get(f'{self.api_endpoint}/hotspots/{hotspot_address}')
+        if _hotspot_return.status_code < 300:
+            return self.parse_hotspot_return(_hotspot_return.json()['data'])
 
     def get_hotspots_activity(self, hotspot_addresses=None):
         if hotspot_addresses is None:
