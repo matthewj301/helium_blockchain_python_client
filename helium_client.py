@@ -5,6 +5,7 @@ import sys
 logger.remove()
 logger.add(sys.stdout, level='INFO')
 
+
 class HeliumClient:
     def __init__(self, wallet_address, api_version=None):
         if api_version is None:
@@ -16,7 +17,8 @@ class HeliumClient:
         self.req = requests.Session()
         self.account_hotspots = self.get_account_hotspots()
         self.account_hotspot_addresses = [ha['hotspot_address'] for ha in self.account_hotspots]
-        self.account_hotspot_address_lookup = {ha['hotspot_address']: ha['hotspot_name'] for ha in self.account_hotspots}
+        self.account_hotspot_address_lookup = {ha['hotspot_address']: ha['hotspot_name'] for ha in
+                                               self.account_hotspots}
 
     def parse_hotspot_returns(self, _hotspot_list):
         all_hotspot_data = []
@@ -31,7 +33,7 @@ class HeliumClient:
                            f'{_hotspot_data["geocode"]["short_country"]}'
 
         necessary_hotspot_info = {
-            'hotspot_name': _hotspot_data['name'], 'hotspot_address' : _hotspot_data['address'],
+            'hotspot_name': _hotspot_data['name'], 'hotspot_address': _hotspot_data['address'],
             'date_added': _hotspot_data['timestamp_added'],
             'hotspot_status': _hotspot_data['status']['online'],
             'reward_scale': _hotspot_data['reward_scale'], 'address': readable_address,
@@ -42,37 +44,36 @@ class HeliumClient:
 
     def parse_hotspot_activity_return(self, _hotspot_address, _hotspot_activity_data):
         _activity_type = _hotspot_activity_data['type']
-        necessary_activity_info = {'activity_type': _activity_type, 'time': _hotspot_activity_data['time'],
-                                   'hotspot_name': self.account_hotspot_address_lookup[_hotspot_address]}
-        if _activity_type == 'poc_receipts_v1':
-            additional_info = _hotspot_activity_data['path'][0]
-            if _hotspot_address == additional_info['challengee']:
-                necessary_activity_info['challenegee'] = self.account_hotspot_address_lookup[additional_info['challengee']]
-            for _possible_witness in _hotspot_activity_data['path'][0]['witnesses']:
-                if _possible_witness['gateway'] == _hotspot_address:
-                    necessary_activity_info['witness_name'] = self.account_hotspot_address_lookup[_hotspot_address]
-                    necessary_activity_info['is_valid'] = _possible_witness['is_valid']
-                    necessary_activity_info['snr'] = _possible_witness['snr']
-                    necessary_activity_info['signal'] = _possible_witness['signal']
-                    necessary_activity_info['channel'] = _possible_witness['channel']
-                    if necessary_activity_info['is_valid'] is False:
-                        necessary_activity_info['invalid_reason'] = _possible_witness['invalid_reason']
-                else:
-                    necessary_activity_info['witness_name'] = self.get_hotspot_by_address(_possible_witness['gateway'])
-                    necessary_activity_info['is_valid'] = _possible_witness['is_valid']
-                    necessary_activity_info['snr'] = _possible_witness['snr']
-                    necessary_activity_info['signal'] = _possible_witness['signal']
-                    necessary_activity_info['channel'] = _possible_witness['channel']
-                    if necessary_activity_info['is_valid'] is False:
-                        necessary_activity_info['invalid_reason'] = _possible_witness['invalid_reason']
+        necessary_activity_info = {'activity_type': _activity_type,
+                                   'time': _hotspot_activity_data['time'],
+                                   'hotspot_address': _hotspot_address,
+                                   'rewards_list': [],
+                                   'witness_list': []}
 
+        if _activity_type == 'poc_receipts_v1':
+            parsed_witness_list = []
+            additional_info = _hotspot_activity_data['path'][0]
+            necessary_activity_info['challenegee_address'] = additional_info['challengee']
+            for _possible_witness in _hotspot_activity_data['path'][0]['witnesses']:
+                temp_dir = {
+                    'gateway_address': _possible_witness['gateway'],
+                    'is_valid': _possible_witness['is_valid'],
+                    'snr': _possible_witness['snr'],
+                    'signal': _possible_witness['signal'],
+                    'channel': _possible_witness['channel']
+                }
+
+                if temp_dir['is_valid'] is False:
+                    temp_dir['invalid_reason'] = _possible_witness['invalid_reason']
+                parsed_witness_list.append(temp_dir)
+            necessary_activity_info['witness_list'] = parsed_witness_list
         elif _activity_type == 'poc_request_v1':
-            necessary_activity_info['challenger'] = self.account_hotspot_address_lookup[_hotspot_activity_data['challenger']]
+            necessary_activity_info['challenger_address'] = _hotspot_activity_data['challenger']
         elif _activity_type == 'rewards_v2':
             for _possible_reward in _hotspot_activity_data['rewards']:
-                if _possible_reward['gateway'] == _hotspot_address:
-                    necessary_activity_info['type'] = _possible_reward['type']
-                    necessary_activity_info['reward_amount'] = _possible_reward['amount']
+                    temp_rewards_dir = {'type': _possible_reward['type'],
+                                        'reward_amount': _possible_reward['amount']}
+            necessary_activity_info['rewards_list'].append(temp_rewards_dir)
         else:
             print(_hotspot_activity_data)
 
@@ -117,8 +118,8 @@ class HeliumClient:
             _hotspot_activity = self.get_hotspot_activity(_hotspot_addr)
             _hotspot_name = self.account_hotspot_address_lookup[_hotspot_addr]
             if _hotspot_activity:
-                _relevant_activity = {_hotspot_name: [self.parse_hotspot_activity_return(_hotspot_addr, _a) for _a
-                                                      in _hotspot_activity]}
+                _relevant_activity = {
+                    _hotspot_name: [self.parse_hotspot_activity_return(_hotspot_addr, _a) for _a in _hotspot_activity]}
             else:
                 _relevant_activity = {_hotspot_name: []}
                 logger.debug(f'no data returned for hotspot: {_hotspot_name}')
